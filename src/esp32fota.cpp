@@ -14,29 +14,24 @@
 
 #include <WiFiClientSecure.h>
 
-esp32FOTA::esp32FOTA(String firwmareType, int firwmareVersion)
-{
+esp32FOTA::esp32FOTA(String firwmareType, int firwmareVersion) {
     _firwmareType = firwmareType;
     _firwmareVersion = firwmareVersion;
     useDeviceID = false;
 }
 
-static void splitHeader(String src, String &header, String &headerValue)
-{
+static void splitHeader(String src, String &header, String &headerValue) {
     int idx = 0;
 
     idx = src.indexOf(':');
     header = src.substring(0, idx);
     headerValue = src.substring(idx + 1, src.length());
     headerValue.trim();
-
     return;
 }
 
 // OTA Logic
-void esp32FOTA::execOTA()
-{
-
+void esp32FOTA::execOTA() {
     WiFiClient client;
     int contentLength = 0;
     bool isValidContentType = false;
@@ -44,49 +39,42 @@ void esp32FOTA::execOTA()
 
     Serial.println("Connecting to: " + String(_host));
     // Connect to Webserver
-    if (client.connect(_host.c_str(), _port))
-    {
+    if (client.connect(_host.c_str(), _port)) {
         // Connection Succeed.
         // Fetching the bin
         Serial.println("Fetching Bin: " + String(_bin));
 
         // Get the contents of the bin file
-        client.print(String("GET ") + _bin + " HTTP/1.1\r\n" +
-                     "Host: " + _host + "\r\n" +
-                     "Cache-Control: no-cache\r\n" +
-                     "Connection: close\r\n\r\n");
+        client.print(String("GET ") + _bin + " HTTP/1.1\r\n" + 
+            "Host: " + _host + "\r\n" +
+            "Cache-Control: no-cache\r\n" +
+            "Connection: close\r\n\r\n");
 
         unsigned long timeout = millis();
-        while (client.available() == 0)
-        {
-            if (millis() - timeout > 5000)
-            {
+        while (client.available() == 0) {
+            if (millis() - timeout > 5000) {
                 Serial.println("Client Timeout !");
                 client.stop();
                 return;
             }
         }
 
-        while (client.available())
-        {
+        while (client.available()) {
             String header, headerValue;
             // read line till /n
             String line = client.readStringUntil('\n');
             // remove space, to check if the line is end of headers
             line.trim();
 
-            if (!line.length())
-            {
+            if (!line.length()) {
                 //headers ended
                 break; // and get the OTA started
             }
 
             // Check if the HTTP Response is 200
             // else break and Exit Update
-            if (line.startsWith("HTTP/1.1"))
-            {
-                if (line.indexOf("200") < 0)
-                {
+            if (line.startsWith("HTTP/1.1")) {
+                if (line.indexOf("200") < 0) {
                     Serial.println("Got a non 200 status code from server. Exiting OTA Update.");
                     client.stop();
                     break;
@@ -95,35 +83,27 @@ void esp32FOTA::execOTA()
             }
 
             if (false == gotHTTPStatus)
-            {
                 continue;
-            }
 
             splitHeader(line, header, headerValue);
 
             // extract headers here
             // Start with content length
-            if (header.equalsIgnoreCase("Content-Length"))
-            {
+            if (header.equalsIgnoreCase("Content-Length")) {
                 contentLength = headerValue.toInt();
                 Serial.println("Got " + String(contentLength) + " bytes from server");
                 continue;
             }
 
             // Next, the content type
-            if (header.equalsIgnoreCase("Content-type"))
-            {
+            if (header.equalsIgnoreCase("Content-type")) {
                 String contentType = headerValue;
                 Serial.println("Got " + contentType + " payload.");
                 if (contentType == "application/octet-stream")
-                {
                     isValidContentType = true;
-                }
             }
         }
-    }
-    else
-    {
+    } else {
         // Connect to webserver failed
         // May be try?
         // Probably a choppy network?
@@ -136,76 +116,56 @@ void esp32FOTA::execOTA()
     Serial.println("contentLength : " + String(contentLength) + ", isValidContentType : " + String(isValidContentType));
 
     // check contentLength and content type
-    if (contentLength && isValidContentType)
-    {
+    if (contentLength && isValidContentType) {
         // Check if there is enough to OTA Update
         bool canBegin = Update.begin(contentLength);
 
         // If yes, begin
-        if (canBegin)
-        {
+        if (canBegin) {
             Serial.println("Begin OTA. This may take 2 - 5 mins to complete. Things might be quite for a while.. Patience!");
             // No activity would appear on the Serial monitor
             // So be patient. This may take 2 - 5mins to complete
             size_t written = Update.writeStream(client);
 
-            if (written == contentLength)
-            {
+            if (written == contentLength) {
                 Serial.println("Written : " + String(written) + " successfully");
-            }
-            else
-            {
+            } else {
                 Serial.println("Written only : " + String(written) + "/" + String(contentLength) + ". Retry?");
                 // retry??
                 // execOTA();
             }
 
-            if (Update.end())
-            {
+            if (Update.end()) {
                 Serial.println("OTA done!");
-                if (Update.isFinished())
-                {
+                if (Update.isFinished()) {
                     Serial.println("Update successfully completed. Rebooting.");
                     ESP.restart();
-                }
-                else
-                {
+                } else {
                     Serial.println("Update not finished? Something went wrong!");
                 }
-            }
-            else
-            {
+            } else {
                 Serial.println("Error Occurred. Error #: " + String(Update.getError()));
             }
-        }
-        else
-        {
+        } else {
             // not enough space to begin OTA
             // Understand the partitions and
             // space availability
             Serial.println("Not enough space to begin OTA");
             client.flush();
         }
-    }
-    else
-    {
+    } else {
         Serial.println("There was no content in the response");
         client.flush();
     }
 }
 
-bool esp32FOTA::execHTTPcheck()
-{
-
+bool esp32FOTA::execHTTPcheck() {
     String useURL;
 
-    if (useDeviceID)
-    {
+    if (useDeviceID) {
         // String deviceID = getDeviceID() ;
         useURL = checkURL + "?id=" + getDeviceID();
-    }
-    else
-    {
+    } else {
         useURL = checkURL;
     }
 
@@ -214,16 +174,14 @@ bool esp32FOTA::execHTTPcheck()
     Serial.println("Getting HTTP");
     Serial.println(useURL);
     Serial.println("------");
-    if ((WiFi.status() == WL_CONNECTED))
-    { //Check the current connection status
-
+    if ((WiFi.status() == WL_CONNECTED)) {
+        //Check the current connection status
         HTTPClient http;
-
         http.begin(useURL);        //Specify the URL
         int httpCode = http.GET(); //Make the request
 
-        if (httpCode == 200)
-        { //Check is a file was returned
+        if (httpCode == 200) {
+            //Check is a file was returned
 
             String payload = http.getString();
 
@@ -234,8 +192,8 @@ bool esp32FOTA::execHTTPcheck()
             StaticJsonDocument<300> JSONDocument; //Memory pool
             DeserializationError err = deserializeJson(JSONDocument, JSONMessage);
 
-            if (err)
-            { //Check for errors in parsing
+            if (err) {
+                //Check for errors in parsing
                 Serial.println("Parsing failed");
                 delay(5000);
                 return false;
@@ -256,17 +214,9 @@ bool esp32FOTA::execHTTPcheck()
             String fwtype(pltype);
 
             if (plversion > _firwmareVersion && fwtype == _firwmareType)
-            {
                 return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        else
-        {
+            return false;
+        } else {
             Serial.println("Error on HTTP request");
             return false;
         }
@@ -277,8 +227,7 @@ bool esp32FOTA::execHTTPcheck()
     return false;
 }
 
-String esp32FOTA::getDeviceID()
-{
+String esp32FOTA::getDeviceID() {
     char deviceid[21];
     uint64_t chipid;
     chipid = ESP.getEfuseMac();
@@ -288,8 +237,7 @@ String esp32FOTA::getDeviceID()
 }
 
 // Force a firmware update regartless on current version
-void esp32FOTA::forceUpdate(String firmwareHost, int firmwarePort, String firmwarePath)
-{
+void esp32FOTA::forceUpdate(String firmwareHost, int firmwarePort, String firmwarePath) {
     _host = firmwareHost;
     _bin = firmwarePath;
     _port = firmwarePort;
@@ -308,8 +256,7 @@ the port where it can be retrieved
 the type of target device
 the version of the firmware
 */
-typedef struct
-{
+typedef struct {
     int version;
     int port;
     String host;
@@ -322,8 +269,7 @@ The constructor sets only the firmware type and its versions, as these two
 parameters are hardcoded in the device. The other parameters have to be set 
 separately.
 */
-secureEsp32FOTA::secureEsp32FOTA(String firwmareType, int firwmareVersion)
-{
+secureEsp32FOTA::secureEsp32FOTA(String firwmareType, int firwmareVersion) {
     _firwmareType = firwmareType;
     _firwmareVersion = firwmareVersion;
 }
@@ -332,14 +278,11 @@ secureEsp32FOTA::secureEsp32FOTA(String firwmareType, int firwmareVersion)
 This function initializes the connection with the server, verifying that it is
 compliant with the provided certificate.
 */
-bool secureEsp32FOTA::prepareConnection(String destinationServer)
-{
+bool secureEsp32FOTA::prepareConnection(String destinationServer) {
     char *certificate = _certificate;
     clientForOta.setCACert(certificate);
     if (clientForOta.connect(destinationServer.c_str(), _securePort))
-    {
         return true;
-    }
     return false;
 }
 
@@ -349,32 +292,27 @@ It makes use of the attributes of the class, that have to be already set.
 In particular, it makes use of the certificate, the descriptionOfFirmwareURL, 
 the host.
 */
-String secureEsp32FOTA::secureGetContent()
-{
+String secureEsp32FOTA::secureGetContent() {
     String destinationURL = _descriptionOfFirmwareURL;
     char *certificate = _certificate;
 
     bool canConnectToServer = prepareConnection(_host);
-    if (canConnectToServer)
-    {
+    if (canConnectToServer) {
         //Serial.println("connected");
         clientForOta.println("GET https://" + String(_host) + destinationURL + " HTTP/1.0");
         clientForOta.println("Host: " + String(_host) + "");
         clientForOta.println("Connection: close");
         clientForOta.println();
-        while (clientForOta.connected())
-        {
+        while (clientForOta.connected()) {
             String line = clientForOta.readStringUntil('\n');
-            if (line == "\r")
-            {
+            if (line == "\r") {
                 //Serial.println("headers received");
                 break;
             }
         }
 
         String partialContentOfHTTPSResponse = "";
-        while (clientForOta.available())
-        {
+        while (clientForOta.available()) {
             char c = clientForOta.read();
             partialContentOfHTTPSResponse += c;
         }
@@ -392,8 +330,7 @@ In case the version of the fetched firmware is greater than the current version,
 the content has the right format, it returns true, and it modifies the attributes 
 of secureEsp32FOTA accordingly.
 */
-bool secureEsp32FOTA::execHTTPSCheck()
-{
+bool secureEsp32FOTA::execHTTPSCheck() {
     char *certificate = _certificate;
 
     String destinationUrl = _descriptionOfFirmwareURL;
@@ -409,8 +346,8 @@ bool secureEsp32FOTA::execHTTPSCheck()
     StaticJsonDocument<300> JSONDocument; //Memory pool
     DeserializationError err = deserializeJson(JSONDocument, JSONMessage);
 
-    if (err)
-    { //Check for errors in parsing
+    if (err) {
+        //Check for errors in parsing
         Serial.println("Parsing failed");
         delay(5000);
         return false;
@@ -424,8 +361,7 @@ bool secureEsp32FOTA::execHTTPSCheck()
 
     clientForOta.stop();
 
-    if (description->version > _firwmareVersion && description->type == _firwmareType)
-    {
+    if (description->version > _firwmareVersion && description->type == _firwmareType) {
         locationOfFirmware = description->host;
         _bin = description->bin;
         return true;
@@ -437,13 +373,9 @@ bool secureEsp32FOTA::execHTTPSCheck()
 /*
 This function checks whether the content of a response is a firmware.
 */
-bool secureEsp32FOTA::isValidContentType(String contentType)
-{
+bool secureEsp32FOTA::isValidContentType(String contentType) {
     if (contentType == "application/octet-stream")
-    {
         return true;
-    }
-
     return false;
 }
 
@@ -452,18 +384,15 @@ This function launches an OTA, using the attributes of the class that describe i
 server, url and certificate.
 */
 
-void secureEsp32FOTA::executeOTA()
-{
+void secureEsp32FOTA::executeOTA() {
     char *certificate = _certificate;
-
     Serial.println("location of fw " + String(locationOfFirmware) + _bin + " HTTP/1.0");
 
     bool canCorrectlyConnectToServer = prepareConnection(locationOfFirmware);
     int contentLength;
     bool isValid;
     bool gotHTTPStatus = false;
-    if (canCorrectlyConnectToServer)
-    {
+    if (canCorrectlyConnectToServer) {
         //Serial.println("ok");
 
         clientForOta.println("GET https://" + String(locationOfFirmware) + _bin + " HTTP/1.0");
@@ -471,24 +400,20 @@ void secureEsp32FOTA::executeOTA()
         clientForOta.println("Connection: close");
         clientForOta.println();
 
-        while (clientForOta.connected())
-        {
+        while (clientForOta.connected()) {
             String header, headerValue;
             // read line till /n
             String line = clientForOta.readStringUntil('\n');
             // remove space, to check if the line is end of headers
             line.trim();
 
-            if (!line.length())
-            {
+            if (!line.length()) {
                 //headers ended
                 break; // and get the OTA started
             }
 
-            if (line.startsWith("HTTP/1.1"))
-            {
-                if (line.indexOf("200") < 0)
-                {
+            if (line.startsWith("HTTP/1.1")) {
+                if (line.indexOf("200") < 0) {
                     //Serial.println("Got a non 200 status code from server. Exiting OTA Update.");
                     break;
                 }
@@ -496,75 +421,54 @@ void secureEsp32FOTA::executeOTA()
             }
 
             if (false == gotHTTPStatus)
-            {
                 continue;
-            }
 
             splitHeader(line, header, headerValue);
             // extract headers here
             // Start with content length
-            if (header.equalsIgnoreCase("Content-Length"))
-            {
+            if (header.equalsIgnoreCase("Content-Length")) {
                 contentLength = headerValue.toInt();
                 continue;
             }
 
             // Next, the content type
-            if (header.equalsIgnoreCase("Content-Type"))
-            {
+            if (header.equalsIgnoreCase("Content-Type")) {
                 isValid = isValidContentType(headerValue);
             }
         }
 
-        if (contentLength && isValid)
-        {
+        if (contentLength && isValid) {
             //Serial.println("beginn");
             bool canBegin = Update.begin(contentLength);
-            if (canBegin)
-            {
+            if (canBegin) {
                 //Serial.println("Begin OTA. This may take 2 - 5 mins to complete. Things might be quite for a while.. Patience!");
 
                 size_t written = Update.writeStream(clientForOta);
 
-                if (written == contentLength)
-                {
+                if (written == contentLength) {
                     //Serial.println("Written : " + String(written) + " successfully");
-                }
-                else
-                {
+                } else {
                     //Serial.println("Written only : " + String(written) + "/" + String(contentLength) + ". Retry?");
                 }
 
-                if (Update.end())
-                {
+                if (Update.end()) {
                     Serial.println("OTA done!");
-                    if (Update.isFinished())
-                    {
+                    if (Update.isFinished()) {
                         Serial.println("Update successfully completed. Rebooting.");
                         ESP.restart();
-                    }
-                    else
-                    {
+                    } else {
                         Serial.println("Update not finished? Something went wrong!");
                     }
-                }
-                else
-                {
+                } else {
                     Serial.println("Error Occurred. Error #: " + String(Update.getError()));
                 }
-            }
-            else
-            {
+            } else {
                 Serial.println(" could not begin");
             }
-        }
-        else
-        {
+        } else {
             Serial.println("Content invalid");
         }
-    }
-    else
-    {
+    } else {
         Serial.println("Generic error");
     }
 }
