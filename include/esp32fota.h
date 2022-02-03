@@ -9,46 +9,24 @@
 #define esp32fota_h
 
 #include "Arduino.h"
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <Update.h>
+#include <WiFi.h>
 #include <WiFiClientSecure.h>
 
 class esp32FOTA {
   public:
     esp32FOTA(String firwmareType, int firwmareVersion);
-    void forceUpdate(String firwmareHost, int firwmarePort, String firwmarePath);
+    bool execHTTPcheck(String checkURL);
+    int getVersionAvailable();
     void execOTA();
-    bool execHTTPcheck();
-    bool useDeviceID;
-    String checkURL;
 
   private:
-    String getDeviceID();
-    String _firwmareType;
-    int _firwmareVersion;
-    String _host;
-    String _bin;
-    int _port;
-};
+    String _firmwareType, _firmwareUrl;
+    int _firmwareVersion, _newVersion;
 
-class secureEsp32FOTA {
-  public:
-    secureEsp32FOTA(String firwmareType, int firwmareVersion);
-    bool execHTTPSCheck();
-    void executeOTA();
-    String _descriptionOfFirmwareURL;
-    char *_certificate;
-    unsigned int _securePort = 443;
-    WiFiClientSecure clientForOta;
-    String _host;
-
-  private:
-    bool prepareConnection(String locationOfServer);
-    String secureGetContent();
-    bool isValidContentType(String line);
-    String _firwmareType;
-    int _firwmareVersion;
-    String locationOfFirmware;
-    String _bin;
-    int _port;
+    bool checkJSONManifest(JsonVariant JSONDocument);
 };
 
 #endif
