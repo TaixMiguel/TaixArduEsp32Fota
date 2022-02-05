@@ -1,0 +1,26 @@
+{
+  "name": "TaixArduEsp32Fota",
+  "version": "0.0.1",
+  "description": "Una librería para actualizar un microcontrolador basada en la librería de https://github.com/chrisjoyce911/esp32FOTA/",
+  "keywords": "TaixMiguel, esp32FOTA",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TaixMiguel/TaixArduEsp32Fota.git"
+  },
+  "authors": [
+    {
+      "name": "TaixMiguel",
+      "url": "https://github.com/TaixMiguel",
+      "maintainer": true
+    }
+  ],
+  "license": "GNU General Public License v3.0",
+  "frameworks": "arduino",
+  "platforms": [
+    "esp32",
+    "espressif32"
+  ],
+  "dependencies": {
+    "bblanchon/ArduinoJson": "^6.19.1"
+  }
+}
