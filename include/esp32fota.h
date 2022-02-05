@@ -19,14 +19,18 @@ class esp32FOTA {
   public:
     esp32FOTA(String firwmareType, int firwmareVersion);
     bool execHTTPcheck(String checkURL);
+    void setGitHub(String token);
     int getVersionAvailable();
     void execOTA();
 
   private:
-    String _firmwareType, _firmwareUrl;
+    String _firmwareType, _firmwareUrl, token;
     int _firmwareVersion, _newVersion;
+    bool swGitHub;
 
+    void addHeadersParams(HTTPClient& http);
     bool checkJSONManifest(JsonVariant JSONDocument);
+    void addHeaderParam(HTTPClient& http, String name, String value);
 };
 
 #endif

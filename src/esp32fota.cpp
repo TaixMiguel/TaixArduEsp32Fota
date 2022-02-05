@@ -30,6 +30,7 @@ void esp32FOTA::execOTA() {
 
 	const char* headers[] = { "Content-Length", "Content-type" };
 	http.collectHeaders(headers, 2);
+	addHeadersParams(http);
 	int httpCode = http.GET();
 
 	if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
@@ -107,6 +108,7 @@ bool esp32FOTA::execHTTPcheck(String checkURL) {
 		client.setInsecure();
 		http.begin(client, checkURL);
 	} else http.begin(checkURL);
+	addHeadersParams(http);
 
 	int httpCode = http.GET(); //Make the request
 	if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {  //Check is a file was returned
@@ -184,4 +186,21 @@ bool esp32FOTA::checkJSONManifest(JsonVariant JSONDocument) {
 
 int esp32FOTA::getVersionAvailable() {
 	return _newVersion;
+}
+
+void esp32FOTA::addHeadersParams(HTTPClient& http) {
+	if (swGitHub) {
+		addHeaderParam(http, F("Accept"), "application/vnd.github.v3.raw");
+		//addHeaderParam(http, F("User-Agent"), "request");
+	}
+	if (!token.isEmpty())
+		addHeaderParam(http, F("authorization"), "Bearer " + token);
+}
+void esp32FOTA::addHeaderParam(HTTPClient& http, String name, String value) {
+	http.addHeader(name, value);
+	log_i("Added to header [%s]: %s", name.c_str(), value.c_str());
+}
+void esp32FOTA::setGitHub(String token) {
+	this->token = token;
+	swGitHub = true;
 }
