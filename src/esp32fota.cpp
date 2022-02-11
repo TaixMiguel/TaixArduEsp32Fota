@@ -8,8 +8,13 @@
 #include "esp32fota.h"
 
 esp32FOTA::esp32FOTA(String firmwareType, int firmwareVersion) {
-	_firmwareVersion = firmwareVersion;
-	_firmwareType = firmwareType;
+	semanticVersion.init(firmwareVersion);
+	this->firmwareType = firmwareType;
+}
+
+esp32FOTA::esp32FOTA(String firmwareType, String firmwareVersion) {
+	semanticVersion.init(firmwareVersion);
+	this->firmwareType = firmwareType;
 }
 
 // OTA Logic
@@ -21,12 +26,12 @@ void esp32FOTA::execOTA() {
 	WiFiClientSecure client;
 	//http.setConnectTimeout( 1000 );
 
-	log_i("Connecting to: %s\r\n", _firmwareUrl.c_str());
-	if (_firmwareUrl.substring(0, 5) == "https") {
+	log_i("Connecting to: %s\r\n", firmwareUrl.c_str());
+	if (firmwareUrl.substring(0, 5) == "https") {
 		// We're downloading from a secure URL, but we don't want to validate the root cert.
 		client.setInsecure();
-		http.begin(client, _firmwareUrl);
-	} else http.begin(_firmwareUrl);
+		http.begin(client, firmwareUrl);
+	} else http.begin(firmwareUrl);
 
 	const char* headers[] = { "Content-Length", "Content-type" };
 	http.collectHeaders(headers, 2);
@@ -39,7 +44,7 @@ void esp32FOTA::execOTA() {
 		if (contentType == "application/octet-stream")
 			isValidContentType = true;
 	} else
-		log_i("Connection to %s failed. Please check your setup", _firmwareUrl);
+		log_i("Connection to %s failed. Please check your setup", firmwareUrl);
 
 	// Check what is the contentLength and if content type is `application/octet-stream`
 	log_i("contentLength : %i, isValidContentType : %s", contentLength, String(isValidContentType));
@@ -146,46 +151,48 @@ bool esp32FOTA::execHTTPcheck(String checkURL) {
 }
 
 bool esp32FOTA::checkJSONManifest(JsonVariant JSONDocument) {
-	if (strcmp(JSONDocument["type"].as<const char *>(), _firmwareType.c_str()) != 0) {
-		log_i("Payload type in manifest %s doesn't match current firmware %s", JSONDocument["type"].as<const char *>(), _firmwareType.c_str() );
-		log_i("Doesn't match type: %s", _firmwareType.c_str() );
+	if (strcmp(JSONDocument["type"].as<const char *>(), firmwareType.c_str()) != 0) {
+		log_i("Payload type in manifest %s doesn't match current firmware %s", JSONDocument["type"].as<const char *>(), firmwareType.c_str() );
+		log_i("Doesn't match type: %s", firmwareType.c_str() );
 		return false;  // Move to the next entry in the manifest
 	}
-	log_i("Payload type in manifest %s matches current firmware %s", JSONDocument["type"].as<const char *>(), _firmwareType.c_str() );
+	log_i("Payload type in manifest %s matches current firmware %s", JSONDocument["type"].as<const char *>(), firmwareType.c_str() );
 
 	if (JSONDocument["version"].is<uint16_t>()) {
 		log_i("JSON version: %d (int)", JSONDocument["version"].as<uint16_t>());
-		_newVersion = JSONDocument["version"].as<uint16_t>();
+		newVersion = JSONDocument["version"].as<uint16_t>();
+	} else if (JSONDocument["version"].is<const char *>()) {
+		log_i("JSON version: %s (semver)", JSONDocument["version"].as<const char *>());
+		newVersion = JSONDocument["version"].as<const char *>();
 	} else {
 		log_e("Invalid semver format received in manifest. Defaulting to 0");
-		_newVersion = 0;
+		newVersion = (String) 0;
 	}
-	log_i("Payload firmware version: %d", _newVersion );
+	log_i("Payload firmware version: %s", newVersion);
 
 	if (JSONDocument["url"].is<String>()) {
 		// We were provided a complete URL in the JSON manifest - use it
-		_firmwareUrl = JSONDocument["url"].as<String>();
+		firmwareUrl = JSONDocument["url"].as<String>();
 		if (JSONDocument["host"].is<String>())  // If the manifest provides both, warn the user
 			log_w("Manifest provides both url and host - Using URL");
 	} else if (JSONDocument["host"].is<String>() && JSONDocument["port"].is<uint16_t>() && JSONDocument["bin"].is<String>()) {
 		// We were provided host/port/bin format - Build the URL
 		if( JSONDocument["port"].as<uint16_t>() == 443 || JSONDocument["port"].as<uint16_t>() == 4433)
-			_firmwareUrl = String("https://");
+			firmwareUrl = String("https://");
 		else
-			_firmwareUrl = String("http://");
-		_firmwareUrl += JSONDocument["host"].as<String>() + ":" + String(JSONDocument["port"].as<uint16_t>()) + JSONDocument["bin"].as<String>();
+			firmwareUrl = String("http://");
+		firmwareUrl += JSONDocument["host"].as<String>() + ":" + String(JSONDocument["port"].as<uint16_t>()) + JSONDocument["bin"].as<String>();
 	} else {
 		// JSON was malformed - no firmware target was provided
 		log_e("JSON manifest was missing both 'url' and 'host'/'port'/'bin' keys");
 		return false;
 	}
 
-	if (_firmwareVersion < _newVersion) return true;
-	return false;
+	return semanticVersion.isGreater(newVersion);
 }
 
-int esp32FOTA::getVersionAvailable() {
-	return _newVersion;
+String esp32FOTA::getVersionAvailable() {
+	return newVersion;
 }
 
 void esp32FOTA::addHeadersParams(HTTPClient& http) {

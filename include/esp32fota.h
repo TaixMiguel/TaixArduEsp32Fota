@@ -11,6 +11,7 @@
 #include "Arduino.h"
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include "semanticVersion.hpp"
 #include <Update.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -18,14 +19,17 @@
 class esp32FOTA {
   public:
     esp32FOTA(String firwmareType, int firwmareVersion);
+    esp32FOTA(String firwmareType, String firwmareVersion);
+
     bool execHTTPcheck(String checkURL);
     void setGitHub(String token);
-    int getVersionAvailable();
+    String getVersionAvailable();
     void execOTA();
 
   private:
-    String _firmwareType, _firmwareUrl, token;
-    int _firmwareVersion, _newVersion;
+    String firmwareType, firmwareUrl, token;
+    SemanticVersion semanticVersion;
+    String newVersion;
     bool swGitHub;
 
     void addHeadersParams(HTTPClient& http);
